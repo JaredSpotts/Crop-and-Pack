@@ -1,0 +1,3 @@
+C:/Users/jared/projects/slime-golf/render-helper/build/CMakeFiles/render_helper.dir
+C:/Users/jared/projects/slime-golf/render-helper/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/jared/projects/slime-golf/render-helper/build/CMakeFiles/ZERO_CHECK.dir

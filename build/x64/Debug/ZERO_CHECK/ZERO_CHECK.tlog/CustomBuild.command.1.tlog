@@ -1,0 +1,10 @@
+^C:\USERS\JARED\PROJECTS\SLIME-GOLF\RENDER-HELPER\BUILD\CMAKEFILES\D7C53F67ABEE376ACD534763AE0C1700\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/jared/projects/slime-golf/render-helper -BC:/Users/jared/projects/slime-golf/render-helper/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/jared/projects/slime-golf/render-helper/build/RenderHelper.slnx
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

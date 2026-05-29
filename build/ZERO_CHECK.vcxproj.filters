@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\jared\projects\slime-golf\render-helper\build\CMakeFiles\d7c53f67abee376acd534763ae0c1700\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{6B404A37-A487-3E61-9F4D-1A2A397EE297}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
