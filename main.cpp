@@ -6,6 +6,7 @@
 #include <opencv2/opencv.hpp>
 #include <vector>
 #include <iomanip>
+#include <algorithm>
 
 #include "render_pass.h"
 
@@ -15,27 +16,37 @@ namespace fs = std::filesystem;
 
 // Globals
 fs::path base_path;
+fs::path godot_base_path;
 bool skip_render_helper = false;
 bool skip_importer = false;
 vector<Pass> passes;
-string write_name = "godot_info";
+
 
 
 json render_info;
+json settings;
 
 PipelineContext pipeline_context;
 
-
+void print_setting(const string& level, const string& label) {
+    if (level == "info") {
+        spdlog::info(label);
+    }
+    else if (level == "error") {
+        spdlog::error(label);
+    }
+}
 
 template<typename T>
-void print_setting(string level, string label, T value){
-    if(level == "info"){
+void print_setting(const string& level, const string& label, const T& value) {
+    if (level == "info") {
         spdlog::info(label, value);
     }
-    else if(level == "error"){
+    else if (level == "error") {
         spdlog::error(label, value);
     }
 }
+
 
 void compute_crop_box(Pass& pass){
     fs::path path = pass.path;
@@ -111,7 +122,21 @@ bool validate_filepath(fs::path path, string filename = ""){
     return false;
 }
 
-void parse_json(){
+void parse_settings_json(){
+    ifstream in_file("settings.json");
+    if (!in_file){
+        print_setting("error", "no settings file");
+    }
+    else{
+        in_file >> settings;
+        in_file.close();
+        godot_base_path = settings["godot_filepath"].get<std::string>();
+        print_setting("info", "Godot base path {}", godot_base_path.string());
+    }
+
+}
+
+void parse_render_json(){
     
     base_path = render_info["filepath"].get<string>();
     print_setting("info", "file path: {}", base_path.string());
@@ -141,6 +166,9 @@ void parse_json(){
 
     pipeline_context.animation_name = render_info["identity"]["animation_name"];
     print_setting("info", "animation name: {}", pipeline_context.animation_name);
+
+    pipeline_context.role = render_info["identity"]["role"];
+    print_setting("info", "character role: {}", pipeline_context.role);
 
     pipeline_context.animation_type = render_info["render"]["animation_type"];
     print_setting("info", "animation type: {}", pipeline_context.animation_type);
@@ -236,37 +264,51 @@ void make_spritesheets(){
     }
 }
 
-void write_sprite_sheets(){
-    for (auto &pass : passes){
-        if (pass.write_sprite_sheet){
-            fs::path name_path = base_path / pass.name;
-            string name_string = name_path.string() + ".png";
-            bool save_successful = cv::imwrite(name_string, pass.sprite_sheet);
-            if (save_successful){
-                print_setting("info", "Sprite sheet saved at {}", name_string);
-            }
-            else {
-                print_setting("error", "Sprite sheet failed to save at {}", name_string);
-            }
+void write_sprite_sheet(Pass& pass, fs::path base_write_path){
+    if (pass.write_sprite_sheet){
+        fs::path name_path = base_write_path / pass.name;
+        string name_string = name_path.string() + ".png";
+        bool save_successful = cv::imwrite(name_string, pass.sprite_sheet);
+        if (save_successful){
+            print_setting("info", "Sprite sheet saved at {}", name_string);
+        }
+        else {
+            print_setting("error", "Sprite sheet failed to save at {}", name_string);
         }
     }
 }
 
-void write_json(const string& write_path){
+// Godot sprite frame editor
+
+void edit_sprite_frame(){
+    cout << "here" << endl;
+    vector<float> frame_duration;
+    for (size_t i = 0; i < pipeline_context.cols; ++i){
+        frame_duration.push_back(1.0);
+    }
+
+    fs::path atlas_path = godot_base_path / "characters" / pipeline_context.role / pipeline_context.character /
+        pipeline_context.animation_type / pipeline_context.variation / "atlases";
+    
+    print_setting("info", "atlas path: {}", atlas_path.string());
+    if (!validate_filepath(atlas_path)){
+        if (fs::create_directories(atlas_path)){
+            print_setting("info", "created file directories: {}", atlas_path.string());
+        }
+        else {
+            print_setting("error", "could not create directories: {}", atlas_path.string());
+        }
+    }
+
     json godot_info = {
-        {"filepath", base_path.string()},
-        {"settings", {
-            {"skip_importer", skip_importer}
-            }
-        },
         {"identity", {
                 {"character", pipeline_context.character},
                 {"variation", pipeline_context.variation},
-                {"animation_name", pipeline_context.animation_name}
+                {"animation_name", pipeline_context.animation_name},
+                {"role", pipeline_context.role}
             }
         },
         {"render", {
-            {"passes", render_info["render"]["passes"]},
             {"fps", render_info["render"]["fps"]},
             {"resolution", {
                     {"width", pipeline_context.crop_width * pipeline_context.cols},
@@ -275,7 +317,8 @@ void write_json(const string& write_path){
                 },
             {"animation_type", pipeline_context.animation_type},
             {"loop", render_info["render"]["loop"]},
-            {"render_scale", render_info["render"]["render_scale"]}
+            {"render_scale", render_info["render"]["render_scale"]},
+            {"frame_duration", frame_duration}
         
             }
         },
@@ -290,11 +333,30 @@ void write_json(const string& write_path){
             }
         }
     };
-    print_setting("info", "Wrote {}", write_name);
+
+    // add wrote passes to json
+    vector<string> output_pass_names;
+    for (auto &pass : passes){
+        if (pass.write_sprite_sheet){
+            output_pass_names.push_back(pass.name);
+            write_sprite_sheet(pass, atlas_path);
+
+        }
+    }
+
+    godot_info["render"]["passes"] = output_pass_names;
+
+    string write_name = pipeline_context.character + "-" + pipeline_context.animation_type + "-" + 
+        pipeline_context.variation + "-" + pipeline_context.animation_name + ".json";
+        
+    fs::path write_path = godot_base_path / "_import" / write_name;
+    print_setting("info", "Wrote {}", write_path.string());
     std::ofstream out_file(write_path);
     out_file << std::setw(4) << godot_info;
     out_file.close();
+
 }
+
 
 int main(int argc, char* argv[]) {
     string render_info_path;
@@ -313,7 +375,7 @@ int main(int argc, char* argv[]) {
     }
 
 
-    std::ifstream info_file(render_info_path);
+    ifstream info_file(render_info_path);
     if (!info_file){
         cout << "No render info json file found" << endl;
         return -1;
@@ -321,13 +383,29 @@ int main(int argc, char* argv[]) {
     info_file >> render_info;
     info_file.close();
 
-    parse_json();
+    parse_settings_json();
+    if (godot_base_path.string().empty()){
+        return -1;
+    }
+
+    parse_render_json();
+    if (passes.empty()){
+        print_setting("error", "No passes read from json");
+        return -1;
+    }
     compute_crop_box(passes.at(0));
     make_spritesheets();
-    write_sprite_sheets();
+    for (auto &pass : passes){
+        if (pass.write_sprite_sheet){
+            write_sprite_sheet(pass, base_path);
+        }
+    }
+
+    edit_sprite_frame();
     
-    fs::path write_path = base_path / (write_name + ".json");
-    write_json(write_path.string());
+    // fs::path write_path = base_path / (write_name + ".json");
+    // write_json(write_path.string());
 
     return 0;
 }
+

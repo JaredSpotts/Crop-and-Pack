@@ -1,13 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <CustomBuild Include="C:\Users\jared\projects\slime-golf\render-helper\build\CMakeFiles\d7c53f67abee376acd534763ae0c1700\generate.stamp.rule">
+    <CustomBuild Include="C:\Users\jared\projects\slime-golf\CropAndPack\build\CMakeFiles\5a137053742cfd2808813b3323818bb6\generate.stamp.rule">
       <Filter>CMake Rules</Filter>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="CMake Rules">
-      <UniqueIdentifier>{6B404A37-A487-3E61-9F4D-1A2A397EE297}</UniqueIdentifier>
+      <UniqueIdentifier>{FAB1C22F-F680-387D-87F8-7704AB1635E5}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

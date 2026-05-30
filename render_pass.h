@@ -15,6 +15,7 @@ struct PipelineContext {
     std::string variation;
     std::string animation_name;
     std::string animation_type;
+    std::string role;
 
     int frame_width = 0;
     int frame_height = 0;

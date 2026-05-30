@@ -38,11 +38,11 @@ C:/Program Files/CMake/share/cmake-4.2/Modules/Platform/Windows-MSVC.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/Platform/Windows.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/Platform/WindowsPaths.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/SelectLibraryConfigurations.cmake
-C:/Users/jared/projects/slime-golf/render-helper/CMakeLists.txt
-C:/Users/jared/projects/slime-golf/render-helper/build/CMakeFiles/4.2.1/CMakeCCompiler.cmake
-C:/Users/jared/projects/slime-golf/render-helper/build/CMakeFiles/4.2.1/CMakeCXXCompiler.cmake
-C:/Users/jared/projects/slime-golf/render-helper/build/CMakeFiles/4.2.1/CMakeRCCompiler.cmake
-C:/Users/jared/projects/slime-golf/render-helper/build/CMakeFiles/4.2.1/CMakeSystem.cmake
+C:/Users/jared/projects/slime-golf/CropAndPack/CMakeLists.txt
+C:/Users/jared/projects/slime-golf/CropAndPack/build/CMakeFiles/4.2.1/CMakeCCompiler.cmake
+C:/Users/jared/projects/slime-golf/CropAndPack/build/CMakeFiles/4.2.1/CMakeCXXCompiler.cmake
+C:/Users/jared/projects/slime-golf/CropAndPack/build/CMakeFiles/4.2.1/CMakeRCCompiler.cmake
+C:/Users/jared/projects/slime-golf/CropAndPack/build/CMakeFiles/4.2.1/CMakeSystem.cmake
 C:/Users/jared/projects/vcpkg/installed/x64-windows/share/absl/abslConfig.cmake
 C:/Users/jared/projects/vcpkg/installed/x64-windows/share/absl/abslConfigVersion.cmake
 C:/Users/jared/projects/vcpkg/installed/x64-windows/share/absl/abslTargets-debug.cmake

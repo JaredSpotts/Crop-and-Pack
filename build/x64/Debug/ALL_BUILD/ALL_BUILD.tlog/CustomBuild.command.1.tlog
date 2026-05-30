@@ -1,6 +1,6 @@
-^C:\USERS\JARED\PROJECTS\SLIME-GOLF\RENDER-HELPER\CMAKELISTS.TXT
+^C:\USERS\JARED\PROJECTS\SLIME-GOLF\CROPANDPACK\CMAKELISTS.TXT
 setlocal
-"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/jared/projects/slime-golf/render-helper -BC:/Users/jared/projects/slime-golf/render-helper/build --check-stamp-file C:/Users/jared/projects/slime-golf/render-helper/build/CMakeFiles/generate.stamp
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/jared/projects/slime-golf/CropAndPack -BC:/Users/jared/projects/slime-golf/CropAndPack/build --check-stamp-file C:/Users/jared/projects/slime-golf/CropAndPack/build/CMakeFiles/generate.stamp
 if %errorlevel% neq 0 goto :cmEnd
 :cmEnd
 endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
