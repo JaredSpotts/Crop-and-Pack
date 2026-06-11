@@ -17,6 +17,7 @@ namespace fs = std::filesystem;
 // Globals
 fs::path base_path;
 fs::path godot_base_path;
+fs::path godot_local_path;
 bool skip_render_helper = false;
 bool skip_importer = false;
 vector<Pass> passes;
@@ -132,6 +133,8 @@ void parse_settings_json(){
         in_file.close();
         godot_base_path = settings["godot_filepath"].get<std::string>();
         print_setting("info", "Godot base path {}", godot_base_path.string());
+        godot_local_path = settings["godot_local_path"].get<std::string>();
+        print_setting("info", "Godot local path {}", godot_local_path.string());
     }
 
 }
@@ -266,8 +269,9 @@ void make_spritesheets(){
 
 void write_sprite_sheet(Pass& pass, fs::path base_write_path){
     if (pass.write_sprite_sheet){
-        fs::path name_path = base_write_path / pass.name;
-        string name_string = name_path.string() + ".png";
+        string sheet_name = pass.context.animation_name + "_" + pass.name + ".png";
+        fs::path name_path = base_write_path / sheet_name;
+        string name_string = name_path.string();
         bool save_successful = cv::imwrite(name_string, pass.sprite_sheet);
         if (save_successful){
             print_setting("info", "Sprite sheet saved at {}", name_string);
@@ -287,9 +291,12 @@ void edit_sprite_frame(){
         frame_duration.push_back(1.0);
     }
 
-    fs::path atlas_path = godot_base_path / "characters" / pipeline_context.role / pipeline_context.character /
+    fs::path variation_path = godot_local_path / "characters" / pipeline_context.role / pipeline_context.character /
+        pipeline_context.animation_type / pipeline_context.variation;
+    fs::path atlas_path =  godot_base_path / "characters" / pipeline_context.role / pipeline_context.character /
         pipeline_context.animation_type / pipeline_context.variation / "atlases";
     
+    print_setting("info", "variation path: {}", variation_path.string()); 
     print_setting("info", "atlas path: {}", atlas_path.string());
     if (!validate_filepath(atlas_path)){
         if (fs::create_directories(atlas_path)){
@@ -307,6 +314,8 @@ void edit_sprite_frame(){
                 {"animation_name", pipeline_context.animation_name},
                 {"role", pipeline_context.role}
             }
+        },
+        {"variation_path", variation_path.string()
         },
         {"render", {
             {"fps", render_info["render"]["fps"]},
