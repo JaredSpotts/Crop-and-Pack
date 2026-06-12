@@ -7,6 +7,7 @@
 #include <vector>
 #include <iomanip>
 #include <algorithm>
+#include <chrono>
 
 #include "render_pass.h"
 
@@ -21,7 +22,7 @@ fs::path godot_local_path;
 bool skip_render_helper = false;
 bool skip_importer = false;
 vector<Pass> passes;
-
+std::chrono::duration<double, std::milli> processing_time;
 
 
 json render_info;
@@ -61,10 +62,9 @@ void compute_crop_box(Pass& pass){
     
     for (auto &img_path : fs::directory_iterator(path)){
         cv::Mat img_grey = cv::imread(img_path.path().string(), cv::IMREAD_GRAYSCALE);
-        cv::Mat img_color = cv::imread(img_path.path().string(), cv::IMREAD_COLOR);
         cv::Mat mask;
 
-        if (img_grey.empty() || img_color.empty()) {
+        if (img_grey.empty()) {
             print_setting("error", "failed to load image: {}", img_path.path().string());
             continue;
         }
@@ -202,7 +202,6 @@ void parse_render_json(){
             print_setting("error", "file location {} not found", path.string());
         }
 
-        print_setting("info", "render pass: {}", pass_str);
         passes.emplace_back(pipeline_context, path, pass_str);
     }
     for (auto &pass : passes){
@@ -249,6 +248,7 @@ void make_spritesheets(){
         ++i;
     }
 
+    auto crop_start = std::chrono::steady_clock::now();
     for (int i = 0; i < pipeline_context.frame_count; i++){
         //print_setting("info", "cropping frame {} start", i);
         FrameResult result = crop_frame(i, passes);
@@ -265,6 +265,8 @@ void make_spritesheets(){
                 //print_setting("info", "writing frame {} finish", i);
             }
     }
+    auto crop_end = std::chrono::steady_clock::now();
+    processing_time = crop_end - crop_start;
 }
 
 void write_sprite_sheet(Pass& pass, fs::path base_write_path){
@@ -368,6 +370,7 @@ void edit_sprite_frame(){
 
 
 int main(int argc, char* argv[]) {
+    auto program_start = std::chrono::steady_clock::now();
     string render_info_path;
     for (int i = 1; i < argc; ++i){
         string arg = argv[i];
@@ -410,10 +413,12 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    edit_sprite_frame();
+    //edit_sprite_frame();
     
-    // fs::path write_path = base_path / (write_name + ".json");
-    // write_json(write_path.string());
+    auto program_end = std::chrono::steady_clock::now();
+    std::chrono::duration<double, std::milli> program_elapsed = program_end - program_start;
+    print_setting("info", "Total program time: {} ms", program_elapsed.count());
+    print_setting("info", "Crop/Pack time: {} ms", processing_time.count());
 
     return 0;
 }
