@@ -8,6 +8,10 @@
 #include <iomanip>
 #include <algorithm>
 #include <chrono>
+#include <threads>
+#include <mutex>
+#include <queue>
+#include <atomic>
 
 #include "render_pass.h"
 
@@ -269,6 +273,63 @@ void make_spritesheets(){
     processing_time = crop_end - crop_start;
 }
 
+void crop_worker(
+    atomic<int>& next_frame_index,
+    queue<FrameResult>& result_queue,
+    mutex& queue_mutex,
+    condition_variable& cv
+){
+        while(true)
+        {        
+            int frame_index = next_frame_index.fetch_add(1);
+            if (frame_index >= pipeline_context.frame_count){
+                return;
+            }
+            FrameResult result = crop_frame(frame_index);
+        }
+    }
+
+void make_spritesheets_threaded(bool dynamic_threads = false, int thread_count){
+    // initialize sprite sheets
+    vector<size_t> writable_pass_idx;
+    size_t i = 0;
+    for (auto &pass : passes){
+        if (pass.write_sprite_sheet){
+            pass.initialize_sprite_sheet();
+            writable_pass_idx.push_back(i);
+        }
+        ++i;
+    }
+
+    // Threaded settup
+    atomic<int> next_frame_index = 0;
+    vector<thread> threads_;
+    queue<FrameResult> result_queue;
+    mutex queue_mutex_;
+    condition_variable cv_;
+
+
+    auto crop_start = std::chrono::steady_clock::now();
+    for (int i = 0; i < pipeline_context.frame_count; i++){
+        //print_setting("info", "cropping frame {} start", i);
+        FrameResult result = crop_frame(i, passes);
+        //print_setting("info", "cropping frame {} finish", i);
+
+            // write the cropped frame to the sprite sheets.
+            int x = 0;
+            for (size_t j : writable_pass_idx){
+                if (result.frames.at(x).empty()){
+                    print_setting("error", "Empty frame at {}", result.frame_idx);
+                }
+                //print_setting("info", "writing frame {} start", i);
+                passes.at(j).write_frame(result.frames.at(x++), result.frame_idx);
+                //print_setting("info", "writing frame {} finish", i);
+            }
+    }
+    auto crop_end = std::chrono::steady_clock::now();
+    processing_time = crop_end - crop_start;
+}
+
 void write_sprite_sheet(Pass& pass, fs::path base_write_path){
     if (pass.write_sprite_sheet){
         string sheet_name = pass.context.animation_name + "_" + pass.name + ".png";
@@ -372,12 +433,19 @@ void edit_sprite_frame(){
 int main(int argc, char* argv[]) {
     auto program_start = std::chrono::steady_clock::now();
     string render_info_path;
+    int thread_count = 0;
     for (int i = 1; i < argc; ++i){
         string arg = argv[i];
         
         if (arg == "--renders"){
             if (i + 1 < argc){
                 render_info_path = argv[++i];
+            }
+        }
+        
+        if (arg == "--threads"){
+            if (i + 1 < argc){
+                thread_count = stoi(argv[++i]);
             }
         }
     }
@@ -406,7 +474,16 @@ int main(int argc, char* argv[]) {
         return -1;
     }
     compute_crop_box(passes.at(0));
-    make_spritesheets();
+
+    bool use_threading = true;
+    bool dynamic_threading = false;
+    if (use_threading){
+        make_spritesheets_threaded(dynamic_threading, thread_count);
+    }
+    else{
+        make_spritesheets();
+    }
+    
     for (auto &pass : passes){
         if (pass.write_sprite_sheet){
             write_sprite_sheet(pass, base_path);
