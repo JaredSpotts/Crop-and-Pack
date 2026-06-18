@@ -39,3 +39,4 @@ Makefile
 *.tmp
 
 settings.json
+benchmark/_norton_

@@ -8,7 +8,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <chrono>
-#include <threads>
+#include <thread>
 #include <mutex>
 #include <queue>
 #include <atomic>
@@ -25,6 +25,7 @@ fs::path godot_base_path;
 fs::path godot_local_path;
 bool skip_render_helper = false;
 bool skip_importer = false;
+size_t final_thread_count = 1;
 vector<Pass> passes;
 std::chrono::duration<double, std::milli> processing_time;
 
@@ -285,11 +286,25 @@ void crop_worker(
             if (frame_index >= pipeline_context.frame_count){
                 return;
             }
-            FrameResult result = crop_frame(frame_index);
+            FrameResult result = crop_frame(frame_index, passes);
+            {
+                unique_lock<mutex> lock(queue_mutex);
+                result_queue.push(result);
+            }
+            cv.notify_one();
         }
     }
 
-void make_spritesheets_threaded(bool dynamic_threads = false, int thread_count){
+void make_spritesheets_threaded(size_t thread_count, bool dynamic_threads = false){
+    // logic for determining final thread count
+    size_t max_threads = thread::hardware_concurrency();
+
+    if (max_threads <= 1){
+        print_setting("error", "thread count <= 1, running single threadded version");
+        make_spritesheets();
+        return;
+    }
+
     // initialize sprite sheets
     vector<size_t> writable_pass_idx;
     size_t i = 0;
@@ -301,34 +316,67 @@ void make_spritesheets_threaded(bool dynamic_threads = false, int thread_count){
         ++i;
     }
 
-    // Threaded settup
-    atomic<int> next_frame_index = 0;
-    vector<thread> threads_;
-    queue<FrameResult> result_queue;
-    mutex queue_mutex_;
-    condition_variable cv_;
-
-
     auto crop_start = std::chrono::steady_clock::now();
-    for (int i = 0; i < pipeline_context.frame_count; i++){
-        //print_setting("info", "cropping frame {} start", i);
-        FrameResult result = crop_frame(i, passes);
-        //print_setting("info", "cropping frame {} finish", i);
 
-            // write the cropped frame to the sprite sheets.
-            int x = 0;
-            for (size_t j : writable_pass_idx){
-                if (result.frames.at(x).empty()){
-                    print_setting("error", "Empty frame at {}", result.frame_idx);
-                }
-                //print_setting("info", "writing frame {} start", i);
-                passes.at(j).write_frame(result.frames.at(x++), result.frame_idx);
-                //print_setting("info", "writing frame {} finish", i);
-            }
+    // threaded settup
+    atomic<int> next_frame_index = 0;
+    vector<thread> workers_;
+    queue<FrameResult> result_queue;
+    mutex queue_mutex;
+    condition_variable cv;
+
+    if (dynamic_threads){
+        thread_count = min(size_t(pipeline_context.frame_count), max_threads - 1);
     }
+    else{
+        thread_count = min(thread_count, min(size_t(pipeline_context.frame_count), max_threads - 1));
+    }
+    final_thread_count = thread_count;
+    for (size_t i = 0; i < thread_count; ++i){
+        workers_.emplace_back(crop_worker, 
+            ref(next_frame_index),
+            ref(result_queue),
+            ref(queue_mutex),
+            ref(cv)
+        );
+    }
+
+    // main thread
+    size_t pasted_count = 0;
+    while (pasted_count < size_t(pipeline_context.frame_count)){
+        unique_lock<mutex> lock(queue_mutex);
+        cv.wait(lock, [&] {
+            return !result_queue.empty();
+        });
+
+        FrameResult result = result_queue.front();
+        result_queue.pop();
+
+        lock.unlock();
+
+        // write the cropped frame to the sprite sheets
+        int x = 0;
+        for (size_t j : writable_pass_idx){
+            if (result.frames.at(x).empty()){
+                print_setting("error", "Empty frame at {}", result.frame_idx);
+            }
+            //print_setting("info", "writing frame {} start", i);
+            passes.at(j).write_frame(result.frames.at(x++), result.frame_idx);
+            //print_setting("info", "writing frame {} finish", i);
+        }
+        ++pasted_count;
+    }
+
+
+    for (size_t i = 0; i < thread_count; ++i){
+        workers_.at(i).join();
+    }
+
     auto crop_end = std::chrono::steady_clock::now();
     processing_time = crop_end - crop_start;
 }
+    
+
 
 void write_sprite_sheet(Pass& pass, fs::path base_write_path){
     if (pass.write_sprite_sheet){
@@ -433,7 +481,8 @@ void edit_sprite_frame(){
 int main(int argc, char* argv[]) {
     auto program_start = std::chrono::steady_clock::now();
     string render_info_path;
-    int thread_count = 0;
+    size_t thread_count = 1;
+    bool dynamic_threading = false;
     for (int i = 1; i < argc; ++i){
         string arg = argv[i];
         
@@ -445,8 +494,12 @@ int main(int argc, char* argv[]) {
         
         if (arg == "--threads"){
             if (i + 1 < argc){
-                thread_count = stoi(argv[++i]);
+                thread_count = std::stoull(argv[++i]);
             }
+        }
+
+        if (arg == "--dynamic"){
+            dynamic_threading = true;
         }
     }
     if (render_info_path.empty()){
@@ -475,10 +528,11 @@ int main(int argc, char* argv[]) {
     }
     compute_crop_box(passes.at(0));
 
-    bool use_threading = true;
-    bool dynamic_threading = false;
+    bool use_threading = (thread_count > 1 || dynamic_threading);
+    print_setting("info", "use_threading: {}", use_threading);
     if (use_threading){
-        make_spritesheets_threaded(dynamic_threading, thread_count);
+        
+        make_spritesheets_threaded(thread_count, dynamic_threading);
     }
     else{
         make_spritesheets();
@@ -494,8 +548,13 @@ int main(int argc, char* argv[]) {
     
     auto program_end = std::chrono::steady_clock::now();
     std::chrono::duration<double, std::milli> program_elapsed = program_end - program_start;
-    print_setting("info", "Total program time: {} ms", program_elapsed.count());
-    print_setting("info", "Crop/Pack time: {} ms", processing_time.count());
+    cout << "--BENCHMARK--" << endl;
+    cout << render_info["render"]["render_scale"] << endl;
+    cout << final_thread_count << endl;
+    cout << pipeline_context.frame_width << " x " << pipeline_context.frame_height << endl;
+    cout << pipeline_context.crop_width << " x " << pipeline_context.crop_height << endl;
+    cout << program_elapsed.count() << endl;
+    cout << processing_time.count() << endl;
 
     return 0;
 }
