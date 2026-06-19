@@ -26,6 +26,8 @@ fs::path godot_local_path;
 bool skip_render_helper = false;
 bool skip_importer = false;
 size_t final_thread_count = 1;
+size_t thread_limit;
+size_t one_angle_thread_limit;
 vector<Pass> passes;
 std::chrono::duration<double, std::milli> processing_time;
 
@@ -137,9 +139,13 @@ void parse_settings_json(){
         in_file >> settings;
         in_file.close();
         godot_base_path = settings["godot_filepath"].get<std::string>();
-        print_setting("info", "Godot base path {}", godot_base_path.string());
+        print_setting("info", "Godot base path: {}", godot_base_path.string());
         godot_local_path = settings["godot_local_path"].get<std::string>();
-        print_setting("info", "Godot local path {}", godot_local_path.string());
+        print_setting("info", "Godot local path: {}", godot_local_path.string());
+        thread_limit = settings["max_threads"];
+        print_setting("info", "Thread limit: {}", thread_limit);
+        one_angle_thread_limit = settings["min_threads"];
+        print_setting("info", "Thread minimum: {}", one_angle_thread_limit);
     }
 
 }
@@ -220,7 +226,7 @@ void parse_render_json(){
 
 
 
-FrameResult crop_frame(int frame_idx, const vector<Pass>& passes){
+FrameResult crop_frame(size_t frame_idx, const vector<Pass>& passes){
     // TODO add color channel remapping
     FrameResult result;
     result.frame_idx = frame_idx;
@@ -254,7 +260,7 @@ void make_spritesheets(){
     }
 
     auto crop_start = std::chrono::steady_clock::now();
-    for (int i = 0; i < pipeline_context.frame_count; i++){
+    for (size_t i = 0; i < pipeline_context.frame_count; i++){
         //print_setting("info", "cropping frame {} start", i);
         FrameResult result = crop_frame(i, passes);
         //print_setting("info", "cropping frame {} finish", i);
@@ -275,14 +281,14 @@ void make_spritesheets(){
 }
 
 void crop_worker(
-    atomic<int>& next_frame_index,
+    atomic<size_t>& next_frame_index,
     queue<FrameResult>& result_queue,
     mutex& queue_mutex,
     condition_variable& cv
 ){
         while(true)
         {        
-            int frame_index = next_frame_index.fetch_add(1);
+            size_t frame_index = next_frame_index.fetch_add(1);
             if (frame_index >= pipeline_context.frame_count){
                 return;
             }
@@ -319,19 +325,24 @@ void make_spritesheets_threaded(size_t thread_count, bool dynamic_threads = fals
     auto crop_start = std::chrono::steady_clock::now();
 
     // threaded settup
-    atomic<int> next_frame_index = 0;
+    atomic<size_t> next_frame_index = 0;
     vector<thread> workers_;
     queue<FrameResult> result_queue;
     mutex queue_mutex;
     condition_variable cv;
 
     if (dynamic_threads){
-        thread_count = min(size_t(pipeline_context.frame_count), max_threads - 1);
+        thread_count = min(thread_limit, min(pipeline_context.frame_count, max_threads - 1));
     }
     else{
-        thread_count = min(thread_count, min(size_t(pipeline_context.frame_count), max_threads - 1));
+        thread_count = min(thread_limit, min(thread_count, min(pipeline_context.frame_count, max_threads - 1)));
+    }
+
+    if (pipeline_context.rows == 1 && pipeline_context.animation_type == "isometric"){
+        thread_count = min(one_angle_thread_limit, thread_count);
     }
     final_thread_count = thread_count;
+    print_setting("info", "Threads used: {}", thread_count);
     for (size_t i = 0; i < thread_count; ++i){
         workers_.emplace_back(crop_worker, 
             ref(next_frame_index),
@@ -343,7 +354,7 @@ void make_spritesheets_threaded(size_t thread_count, bool dynamic_threads = fals
 
     // main thread
     size_t pasted_count = 0;
-    while (pasted_count < size_t(pipeline_context.frame_count)){
+    while (pasted_count < pipeline_context.frame_count){
         unique_lock<mutex> lock(queue_mutex);
         cv.wait(lock, [&] {
             return !result_queue.empty();
@@ -482,7 +493,7 @@ int main(int argc, char* argv[]) {
     auto program_start = std::chrono::steady_clock::now();
     string render_info_path;
     size_t thread_count = 1;
-    bool dynamic_threading = false;
+    bool dynamic_threading = true;
     for (int i = 1; i < argc; ++i){
         string arg = argv[i];
         
@@ -495,12 +506,13 @@ int main(int argc, char* argv[]) {
         if (arg == "--threads"){
             if (i + 1 < argc){
                 thread_count = std::stoull(argv[++i]);
+                dynamic_threading = false;
             }
         }
 
-        if (arg == "--dynamic"){
-            dynamic_threading = true;
-        }
+        // if (arg == "--dynamic"){
+        //     dynamic_threading = true;
+        // }
     }
     if (render_info_path.empty()){
         cout << "No render path input" << endl;
@@ -546,15 +558,15 @@ int main(int argc, char* argv[]) {
 
     //edit_sprite_frame();
     
-    auto program_end = std::chrono::steady_clock::now();
-    std::chrono::duration<double, std::milli> program_elapsed = program_end - program_start;
-    cout << "--BENCHMARK--" << endl;
-    cout << render_info["render"]["render_scale"] << endl;
-    cout << final_thread_count << endl;
-    cout << pipeline_context.frame_width << " x " << pipeline_context.frame_height << endl;
-    cout << pipeline_context.crop_width << " x " << pipeline_context.crop_height << endl;
-    cout << program_elapsed.count() << endl;
-    cout << processing_time.count() << endl;
+    // auto program_end = std::chrono::steady_clock::now();
+    // std::chrono::duration<double, std::milli> program_elapsed = program_end - program_start;
+    // cout << "--BENCHMARK--" << endl;
+    // cout << render_info["render"]["render_scale"] << endl;
+    // cout << final_thread_count << endl;
+    // cout << pipeline_context.frame_width << " x " << pipeline_context.frame_height << endl;
+    // cout << pipeline_context.crop_width << " x " << pipeline_context.crop_height << endl;
+    // cout << program_elapsed.count() << endl;
+    // cout << processing_time.count() << endl;
 
     return 0;
 }

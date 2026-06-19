@@ -26,7 +26,7 @@ struct PipelineContext {
 
     int rows = 0;
     int cols = 0;
-    int frame_count = 0;
+    size_t frame_count = 0;
 
     cv::Rect crop_bb;
 };
@@ -49,6 +49,6 @@ struct Pass {
 };
 
 struct FrameResult {
-    int frame_idx;
+    size_t frame_idx;
     std::vector<cv::Mat> frames;
 };
